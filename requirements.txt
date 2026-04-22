@@ -1,0 +1,40 @@
+# ============================================================
+# WildNode AI - Requirements
+# ============================================================
+
+# Deep Learning
+tensorflow>=2.12.0
+keras>=2.12.0
+
+# Computer Vision (YOLO)
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+
+# Audio Processing
+librosa>=0.10.0
+soundfile>=0.12.1
+numpy>=1.24.0
+
+# Dashboard
+streamlit>=1.28.0
+plotly>=5.17.0
+streamlit-autorefresh>=1.0.0
+streamlit-webrtc>=0.47.0
+aiortc>=1.3.2
+av>=10.0.0
+
+# Environment & Utils
+requests>=2.31.0
+python-dotenv>=1.0.0
+pillow>=10.0.0
+scipy>=1.11.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Date/Time
+pytz>=2023.3
+
+# Simulation
+tqdm>=4.66.0

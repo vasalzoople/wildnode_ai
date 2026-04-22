@@ -1,0 +1,6 @@
+.env
+*.pt
+tmp_updater*.py
+__pycache__/
+*.pyc
+.venv/
