@@ -129,7 +129,7 @@ def plot_training_history(history: tf.keras.callbacks.History, save_path: str):
     plt.tight_layout()
     plt.savefig(save_path, dpi=120, facecolor=fig.get_facecolor())
     plt.close()
-    print(f"[✓] Training plot saved: {save_path}")
+    print(f"[OK] Training plot saved: {save_path}")
 
 
 def train():
@@ -195,7 +195,7 @@ def train():
     print("\n[INFO] Evaluating on validation set...")
     loss, acc = model.evaluate(X_val, y_val, verbose=0)
     print(f"\n{'=' * 60}")
-    print(f"  ✅ Training Complete!")
+    print(f"  [OK] Training Complete!")
     print(f"  Final Validation Accuracy : {acc * 100:.2f}%")
     print(f"  Final Validation Loss     : {loss:.4f}")
     print(f"  Model saved to            : {MODEL_PATH}")

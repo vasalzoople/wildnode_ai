@@ -28,7 +28,7 @@ BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "audio_model.keras")
 
 # ─── CLASS_NAMES defined here (no TF needed) ─────────────────────────────────
-CLASS_NAMES = ["elephant", "tiger", "background"]
+CLASS_NAMES = ["elephant", "wild_boar", "background"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -121,8 +121,8 @@ def simulate_audio_detection():
     import random
     # CLASS_NAMES defined at module level
 
-    # Weighted probabilities to make elephant/tiger more likely than background
-    weights = [0.35, 0.30, 0.35]
+    # Weighted probabilities — elephant and wild boar are crop threats
+    weights = [0.40, 0.40, 0.20]
     chosen_class = random.choices(CLASS_NAMES, weights=weights, k=1)[0]
     class_idx = CLASS_NAMES.index(chosen_class)
 
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 50)
     print("  🔊 WildNode AI – Audio Detection Result")
     print("=" * 50)
-    emoji_map = {"elephant": "🐘", "tiger": "🐯", "background": "🌿"}
+    emoji_map = {"elephant": "🐘", "wild_boar": "🐗", "background": "🌿"}
     emoji = emoji_map.get(result["class"], "❓")
     print(f"  Detected   : {emoji}  {result['class'].upper()}")
     print(f"  Confidence : {result['confidence'] * 100:.1f}%")

@@ -148,9 +148,9 @@ def generate_dummy_dataset(output_dir: str, n_samples_per_class: int = 20):
     print("[INFO] Generating dummy training dataset...")
 
     classes = {
-        "elephant"  : {"freq": 80,   "noise": 0.05},   # Low rumble
-        "tiger"     : {"freq": 300,  "noise": 0.10},   # Mid growl
-        "background": {"freq": None, "noise": 0.30},   # Random noise
+        "elephant"  : {"freq": 80,   "noise": 0.05},   # Low infrasound rumble
+        "wild_boar" : {"freq": 400,  "noise": 0.15},   # High grunt/squeal
+        "background": {"freq": None, "noise": 0.30},   # Random ambient noise
     }
 
     t = np.linspace(0, DURATION, SAMPLE_RATE * DURATION)   # Time axis
@@ -183,9 +183,9 @@ def generate_dummy_dataset(output_dir: str, n_samples_per_class: int = 20):
             save_path = os.path.join(class_dir, f"{class_name}_{i:03d}.npy")
             np.save(save_path, mel)
 
-        print(f"  [✓] Generated {n_samples_per_class} samples for class: '{class_name}'")
+        print(f"  [OK] Generated {n_samples_per_class} samples for class: '{class_name}'")
 
-    print(f"\n[✓] Dummy dataset created at: {output_dir}")
+    print(f"\n[OK] Dummy dataset created at: {output_dir}")
     print(f"    Classes: {list(classes.keys())}")
     print(f"    Samples per class: {n_samples_per_class}")
 

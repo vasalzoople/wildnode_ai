@@ -606,39 +606,223 @@ def tab_alerts():
 #  TAB: AUDIO DETAIL (upgraded: simulation + real audio upload)
 # ─────────────────────────────────────────────────────────────────────────────
 def tab_audio():
+    # ── Session state for continuous audio ────────────────────────────────────
+    if "audio_listening" not in st.session_state:
+        st.session_state.audio_listening = False
+    if "last_audio_result" not in st.session_state:
+        st.session_state.last_audio_result = None
+    if "audio_volume" not in st.session_state:
+        st.session_state.audio_volume = 0.0
+    if "audio_history" not in st.session_state:
+        st.session_state.audio_history = []
+
+    # Crop-damage animal metadata
+    CROP_ANIMALS = {
+        "elephant": {"emoji": "🐘", "color": "#f97316", "threat": "CRITICAL", "action": "Deploy heavy unit immediately. Alert forest rangers."},
+        "wild_boar": {"emoji": "🐗", "color": "#a78bfa", "threat": "HIGH",     "action": "Sound deterrents. Secure crop field perimeter."},
+    }
+
     st.markdown("""
     <div class='glass-card' style='padding:14px 18px;margin-bottom:4px'>
-      <div style='font-size:0.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px'>
-        🔊 Audio Detection System
+      <div style='font-size:0.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px'>
+        🔊 Crop-Threat Audio Detection System
       </div>
       <div style='color:#94a3b8;font-size:0.82rem;line-height:1.7'>
-        <b style='color:#38bdf8'>File Upload</b> – upload a .wav or .mp3 for REAL Deep Learning inference
+        <b style='color:#38bdf8'>Live Continuous Listening</b> – auto-detects <b style='color:#f97316'>Elephant</b> and <b style='color:#a78bfa'>Wild Boar</b> from your microphone in real-time.<br>
+        <b style='color:#64748b'>Silence / background noise is filtered out automatically.</b>
       </div>
     </div>
     """, unsafe_allow_html=True)
-    
-    # (Just upload section here)
-    st.markdown("""
-    <div style='background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.2);
-                border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.8rem;color:#38bdf8'>
-      🧠 <b>Real CNN Mode</b> — Upload an audio file for testing offline files.
-    </div>
-    """, unsafe_allow_html=True)
-    
-    audio_file = st.file_uploader("Upload audio (.wav, .mp3)", type=["wav", "mp3"], label_visibility="collapsed")
-    if audio_file is not None:
-        st.audio(audio_file)
-        if st.button("🔍 Run Audio AI Inference", use_container_width=True):
-            with st.spinner("Processing audio with Librosa and TensorFlow..."):
-                try:
-                    import tempfile
-                    from audio_detection.predict import predict_audio
+
+    # ── Main layout: Visualizer | Results | File Upload ───────────────────────
+    col_live, col_file = st.columns([3, 2])
+
+    with col_live:
+        # ── Toggle button ─────────────────────────────────────────────────────
+        btn_label = "⏹ Stop Listening" if st.session_state.audio_listening else "🎙️ Start Live Listening"
+        btn_color = "#dc2626" if st.session_state.audio_listening else "#16a34a"
+        if st.button(btn_label, use_container_width=True):
+            st.session_state.audio_listening = not st.session_state.audio_listening
+            if not st.session_state.audio_listening:
+                st.session_state.last_audio_result = None
+                st.session_state.audio_volume = 0.0
+            st.rerun()
+
+        # ── Volume visualizer ─────────────────────────────────────────────────
+        vol = st.session_state.audio_volume
+        vol_pct = min(vol * 1000, 100.0)  # scale raw RMS to percentage
+
+        bar_color = "#16a34a"
+        if vol_pct > 60: bar_color = "#f97316"
+        elif vol_pct > 30: bar_color = "#ca8a04"
+
+        st.markdown(f"""
+        <div style='background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+                    border-radius:12px;padding:16px 20px;margin-bottom:12px'>
+          <div style='font-size:0.65rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px'>
+            🎚 Live Mic Level {"(ACTIVE)" if st.session_state.audio_listening else "(IDLE)"}
+          </div>
+          <div style='background:rgba(0,0,0,0.3);border-radius:6px;height:18px;overflow:hidden;margin-bottom:8px'>
+            <div style='width:{vol_pct:.1f}%;height:100%;
+                        background:linear-gradient(90deg,{bar_color},{bar_color}88);
+                        border-radius:6px;
+                        transition:width 0.3s ease;
+                        box-shadow:0 0 10px {bar_color}66'></div>
+          </div>
+          <div style='display:flex;justify-content:space-between;font-size:0.7rem;color:#64748b'>
+            <span>Quiet</span>
+            <span style='color:{bar_color}'>{vol_pct:.0f}%</span>
+            <span>Loud</span>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ── Run one live detection cycle if listening ─────────────────────────
+        if st.session_state.audio_listening:
+            try:
+                import sounddevice as sd
+                from scipy.io.wavfile import write as wav_write
+                import tempfile
+                import numpy as np
+                from audio_detection.predict import predict_audio
+
+                # Auto-refresh every 1.5s
+                from streamlit_autorefresh import st_autorefresh
+                st_autorefresh(interval=1500, key="audio_refresh")
+
+                fs = 22050
+                duration = 1.5  # short chunk for responsiveness
+                chunk = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='float32')
+                sd.wait()
+
+                # RMS volume gate — skip inference on near-silence
+                rms = float(np.sqrt(np.mean(chunk**2)))
+                st.session_state.audio_volume = rms
+                RMS_THRESHOLD = 0.01  # tune this: raise if too sensitive, lower if misses sounds
+
+                if rms < RMS_THRESHOLD:
+                    st.session_state.last_audio_result = {
+                        "class": "background", "confidence": 1.0,
+                        "all_scores": {"elephant": 0.0, "wild_boar": 0.0, "background": 1.0},
+                        "mode": "silence_gate"
+                    }
+                else:
                     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                        tmp.write(audio_file.read())
-                        res = predict_audio(tmp.name)
-                        st.subheader(f"Prediction: {res['class'].upper()} ({res['confidence']*100:.1f}%)")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                        wav_write(tmp.name, fs, chunk)
+                        st.session_state.last_audio_result = predict_audio(tmp.name)
+
+                # Append to history
+                res = st.session_state.last_audio_result
+                st.session_state.audio_history.append({
+                    "class": res["class"],
+                    "conf": res["confidence"],
+                    "vol": rms
+                })
+                if len(st.session_state.audio_history) > 30:
+                    st.session_state.audio_history = st.session_state.audio_history[-30:]
+
+            except ImportError:
+                st.warning("Please install required libraries: `pip install sounddevice scipy`")
+                st.session_state.audio_listening = False
+            except Exception as e:
+                st.error(f"Microphone error: {e}")
+                st.session_state.audio_listening = False
+
+        # ── Detection Result Panel ─────────────────────────────────────────────
+        res = st.session_state.last_audio_result
+        if res:
+            detected = res["class"]
+            conf = res["confidence"]
+
+            if detected in CROP_ANIMALS:
+                meta = CROP_ANIMALS[detected]
+                pulse = "pulse" if meta["threat"] == "CRITICAL" else ""
+                st.markdown(f"""
+                <div class='glass-card {pulse}' style='border-left:4px solid {meta["color"]};border-color:{meta["color"]}44;padding:16px 20px;margin-top:4px'>
+                  <div style='font-size:2rem;text-align:center'>{meta["emoji"]}</div>
+                  <div style='text-align:center;font-size:1.2rem;font-weight:700;color:{meta["color"]};margin:6px 0'>
+                    {detected.upper().replace("_"," ")} DETECTED
+                  </div>
+                  <div style='text-align:center;font-size:0.85rem;color:#94a3b8;margin-bottom:10px'>
+                    Confidence: <b style='color:{meta["color"]}'>{conf*100:.1f}%</b>
+                  </div>
+                  <div style='background:{meta["color"]}22;border:1px solid {meta["color"]}55;
+                              border-radius:8px;padding:8px 12px;font-size:0.8rem;color:#e2e8f0'>
+                    🎯 {meta["action"]}
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div class='glass-card' style='border-left:4px solid #16a34a;padding:12px 20px;margin-top:4px;text-align:center'>
+                  <div style='font-size:1.5rem'>🌿</div>
+                  <div style='color:#16a34a;font-weight:600;margin-top:4px'>All Clear — Background</div>
+                  <div style='color:#64748b;font-size:0.8rem'>No crop-threatening animals detected</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Confidence bar chart
+            scores = res.get("all_scores", {})
+            if scores:
+                fig = make_confidence_bar(res, [])
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        # ── Detection history mini-chart ───────────────────────────────────────
+        if len(st.session_state.audio_history) > 3:
+            hist = st.session_state.audio_history
+            vol_hist = [h["vol"] * 1000 for h in hist]
+            colors = ["#dc2626" if h["class"] == "elephant" else
+                      "#a78bfa" if h["class"] == "wild_boar" else
+                      "#16a34a" for h in hist]
+            fig2 = go.Figure()
+            fig2.add_trace(go.Bar(
+                x=list(range(len(vol_hist))), y=vol_hist,
+                marker_color=colors, opacity=0.85,
+            ))
+            fig2.update_layout(
+                height=80, margin=dict(l=0, r=0, t=0, b=0),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+                yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+                showlegend=False,
+            )
+            st.markdown("<div style='font-size:0.65rem;color:#64748b;margin-bottom:2px'>Recent Audio History (🔴=Elephant 🟣=Wild Boar 🟢=Clear)</div>", unsafe_allow_html=True)
+            st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
+
+    with col_file:
+        st.markdown("""
+        <div style='background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.2);
+                    border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.8rem;color:#a78bfa'>
+          🧠 <b>File Inference Mode</b> — Upload a .wav file to test the AI model offline.
+        </div>
+        """, unsafe_allow_html=True)
+
+        audio_file = st.file_uploader("Upload audio (.wav, .mp3)", type=["wav", "mp3"], label_visibility="collapsed")
+        if audio_file is not None:
+            st.audio(audio_file)
+            if st.button("🔍 Run AI Inference on File", use_container_width=True):
+                with st.spinner("Processing audio with Librosa + TensorFlow..."):
+                    try:
+                        import tempfile
+                        from audio_detection.predict import predict_audio
+                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                            tmp.write(audio_file.read())
+                            res = predict_audio(tmp.name)
+                            detected = res['class']
+                            meta = CROP_ANIMALS.get(detected, {"emoji": "🌿", "color": "#16a34a"})
+                            st.markdown(f"""
+                            <div class='glass-card' style='text-align:center;padding:20px;border-color:{meta["color"]}44'>
+                              <div style='font-size:2.5rem'>{meta["emoji"]}</div>
+                              <div style='font-size:1.1rem;font-weight:700;color:{meta["color"]};margin-top:8px'>
+                                {detected.upper().replace("_"," ")}
+                              </div>
+                              <div style='color:#94a3b8;font-size:0.85rem'>{res["confidence"]*100:.1f}% confidence</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            fig = make_confidence_bar(res, [])
+                            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
 
 def tab_vision():

@@ -3,9 +3,9 @@ wildnode_ai/audio_detection/model.py
 =====================================
 PURPOSE: Define the CNN (Convolutional Neural Network) architecture for
          classifying wildlife audio into 3 categories:
-           0 → Elephant
-           1 → Tiger
-           2 → Background (noise/silence)
+           0 → Elephant   (primary crop raider)
+           1 → Wild Boar  (common crop destroyer)
+           2 → Background (noise/silence/wind)
 
 BEGINNER NOTE:
   A CNN is like a smart image analyzer.
@@ -27,7 +27,7 @@ from tensorflow.keras import layers, models, regularizers
 import numpy as np
 
 # ─── Label Mapping ───────────────────────────────────────────────────────────
-CLASS_NAMES = ["elephant", "tiger", "background"]
+CLASS_NAMES = ["elephant", "wild_boar", "background"]
 NUM_CLASSES = len(CLASS_NAMES)
 
 # ─── Input Shape ─────────────────────────────────────────────────────────────
@@ -107,5 +107,5 @@ if __name__ == "__main__":
     print(get_model_summary(model))
     print(f"\n✅ Model built successfully!")
     print(f"   Input shape : {INPUT_SHAPE}")
-    print(f"   Classes     : {CLASS_NAMES}")
+    print(f"   Classes     : {CLASS_NAMES}  # Crop-damaging animals")
     print(f"   Parameters  : {model.count_params():,}")
